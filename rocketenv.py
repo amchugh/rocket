@@ -1,5 +1,6 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
 from math import sin, cos, floor, atan2, pi, degrees
 import numpy as np
 import random
@@ -22,9 +23,9 @@ class Rocket:
     # Constants
     GRAVITY = 1
     ROCKET_MASS = 1
-    ROCKET_ROTATIONAL_INERTIA = 0.1
+    ROCKET_ROTATIONAL_INERTIA = 0.6
     ROCKET_MAX_INDIVIDUAL_FORCE = 3.2
-    ROCKET_VISUAL_SIZE = 10
+    ROCKET_VISUAL_SIZE = 5
     
     # Dynamics
     x = DEFAULT_SIZE[0]/2
@@ -128,10 +129,10 @@ class RocketEnv:
     def resetRandom(self, seed=0):
         random.seed(seed)
         self.reset()
-        self.rocket.vy = (random.random() - 0.5) * 2 * 20
-        self.rocket.vx = (random.random() - 0.5) * 2 * 20
+        self.rocket.vy = (random.random() - 0.5) * 2 * 10
+        self.rocket.vx = (random.random() - 0.5) * 2 * 10
         self.rocket.theta = random.random() * 2 * pi
-        self.rocket.omega = (random.random() - 0.5) * 2 * 4 * pi
+        self.rocket.omega = (random.random() - 0.5) * 2 * pi
         
     def sense(self):
         target = (self.world_size[0]/2, self.world_size[1]/2)
@@ -177,7 +178,6 @@ class RocketEnv:
             pygame.event.get()
         
     def initrender(self, screen=None, own_window=True):
-        import pygame
         if not self.rendering:
             self.rendering = True
             pygame.init()
@@ -202,7 +202,7 @@ class RocketController:
         self.rot_scalar = rot_scalar
         self.proportional_scalar = proportional_scalar
         self.mag_tolerance = mag_tolerance
-        
+        self.reset()
         self.fitness = -1
         
     def reset(self):
@@ -218,7 +218,7 @@ class RocketController:
         mag = np.linalg.norm(np.array([vx, vy]))
         if abs(delta) <= self.theta_tolerance and mag > self.mag_tolerance:
             # Use the vector magnitude as the amount to slow by
-            return mag*self.vel_kill_scalar/2, mag*self.vel_kill_scalar/2
+            return mag*self.vel_kill_scalar, mag*self.vel_kill_scalar
             
         else:
             if abs(omega) > self.safe_turn_speed: e = omega
