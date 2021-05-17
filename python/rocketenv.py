@@ -6,7 +6,7 @@ import numpy as np
 import random
 
 DEFAULT_SIZE = (400,400)
-DEBUG_TEXT = False
+DEBUG_TEXT = True
 if DEBUG_TEXT:
     pygame.font.init()
     FONT = pygame.font.SysFont(None, 24)
@@ -25,7 +25,7 @@ class Rocket:
     ROCKET_MASS = 1
     ROCKET_ROTATIONAL_INERTIA = 0.6
     ROCKET_MAX_INDIVIDUAL_FORCE = 3.2
-    ROCKET_VISUAL_SIZE = 5
+    ROCKET_VISUAL_SIZE = 10
     
     # Dynamics
     x = DEFAULT_SIZE[0]/2
@@ -194,7 +194,7 @@ class RocketEnv:
             pygame.display.quit()
 
 class RocketController:
-    def __init__(self, safe_turn_speed, vel_kill_scalar, theta_tolerance, rot_scalar, proportional_scalar, mag_tolerance, dt=0.1):
+    def __init__(self, safe_turn_speed, vel_kill_scalar, theta_tolerance, rot_scalar, proportional_scalar, mag_tolerance, derivative_scalar, dt=0.1):
         self.dt = dt
         self.safe_turn_speed = safe_turn_speed
         self.vel_kill_scalar = vel_kill_scalar
@@ -202,6 +202,7 @@ class RocketController:
         self.rot_scalar = rot_scalar
         self.proportional_scalar = proportional_scalar
         self.mag_tolerance = mag_tolerance
+        self.derivative_scalar = derivative_scalar
         self.reset()
         self.fitness = -1
         
@@ -215,7 +216,7 @@ class RocketController:
         if target > 2*pi:
             target -= 2*pi
         delta = shortestTurn(theta, target)
-        mag = np.linalg.norm(np.array([vx, vy]))
+        mag = dist(vx, vy)
         if abs(delta) <= self.theta_tolerance and mag > self.mag_tolerance:
             # Use the vector magnitude as the amount to slow by
             return mag*self.vel_kill_scalar, mag*self.vel_kill_scalar
@@ -225,11 +226,55 @@ class RocketController:
             else: e = omega - (self.safe_turn_speed * (-1 if delta < 0 else 1) )
                 
             self.I = self.I + e*self.dt
-            mv = (e*self.proportional_scalar + self.I + (e-self.e_prev)/self.dt)
+            mv = (e*self.proportional_scalar + self.I + (e-self.e_prev)/self.dt*self.derivative_scalar)
             
             self.e_prev = e
             
             return -mv*self.rot_scalar, mv*self.rot_scalar
+            
+    def moveStep(self, x, y, vx, vy, omega, theta):#, display):
+        dx = 200 - x
+        dy = 200 - y
+        
+        target = atan2(dy, dx) 
+        #pygame.draw.line(display, (0,0,0), (x,y), (x+25*cos(target), y+25*sin(target)))
+        
+        ndx, ndy = normalize(dx, dy)
+        nvx, nvy = normalize(vx, vy)
+        
+        dvx = ndx - nvx
+        dvy = ndy - nvy
+        
+        t = atan2(dvy, dvx)
+        #pygame.draw.line(display, (0,0,255), (x,y), (x+25*cos(t), y+25*sin(t)))
+        t += pi / 2
+        if t > 2*pi:
+            t -= 2*pi
+        
+        delta = shortestTurn(theta, t)
+        
+        if abs(delta) > 0.1:
+            if abs(omega) > self.safe_turn_speed: e = omega
+            else: e = omega - (self.safe_turn_speed * (-1 if delta < 0 else 1) )
+                
+            self.I = self.I + e*self.dt
+            mv = (e*self.proportional_scalar + self.I + (e-self.e_prev)/self.dt*self.derivative_scalar)
+            
+            self.e_prev = e
+            
+            return -mv*self.rot_scalar, mv*self.rot_scalar
+        else:
+            d = dist(dx-x, dy-y)
+            return 0.01*d, 0.01*d
+
+def normalize(x,y):
+    if x == y and y == 0:
+        return 1, 0
+    mg = (x*x + y*y) ** 0.5
+    return x/mg, y/mg
+    
+def dist(x,y):
+    return (x*x+y*y)**0.5
 
 # Given two angles in domain [0, 2pi],
 # return the minimal rotation to tranform
@@ -257,7 +302,7 @@ def main():
     p = [False, False, False, False]
     delt = 0.001
     
-    pid = RocketController(1.0, 10, 0.02, 0.03, 3, 0.1, dt)
+    pid = RocketController(1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137, dt)
     
     running = True
     while running:
@@ -275,7 +320,9 @@ def main():
         f1 += (int(keys[pygame.K_q]) - int(keys[pygame.K_a])) * delt
         f2 += (int(keys[pygame.K_w]) - int(keys[pygame.K_s])) * delt
         
-        pidx, pidy = pid.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
+        env.render()
+        
+        pidx, pidy = pid.moveStep(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta, env.screen) 
         
         if keys[pygame.K_r]:
             env.rocket.vx = 0
@@ -288,7 +335,6 @@ def main():
         
         if keys[pygame.K_i]:
             env.step((pidx, pidy))
-            env.render()
             # Draw the current force text too
             l1 = FONT.render(str(pidx), True, (0,0,0))
             env.screen.blit(l1, (0, 32))
@@ -296,7 +342,6 @@ def main():
             env.screen.blit(l2, (0, 48))
         else:
             env.step((f1,f2))
-            env.render()
             # Draw the current force text too
             l1 = FONT.render(str(f1), True, (0,0,0))
             env.screen.blit(l1, (0, 32))
@@ -345,6 +390,45 @@ def main():
                 # change the value to False, to exit the main loop
                 running = False
 
+def autoMain():
+    dt = 1/5.0
+    env = RocketEnv((800, 800), dt)
+    env.reset();
+    env.rocket.GRAVITY = 0.1
+    env.initrender(None, False)
+    clock = pygame.time.Clock()
+    controller = RocketController(1.30180042, 5.07822616, 0.00407172, 0.01638811, 4.64927884, 0.22577127, 0.62695137, dt)
+    running = True
+    while running:
+        clock.tick(60)
+        
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_x]:
+            env.resetRandom(0);
+            
+        env.render()
+        
+        f1, f2 = controller.moveStep(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta, env.screen) 
+        
+        env.step((f1, f2))
+        
+        if env.isStable():
+            l3 = FONT.render("Stable", True, (0,0,0))
+            env.screen.blit(l3, (0, 96))
+            
+        if env.isFailed():
+            l3 = FONT.render("Failed", True, (0,0,0))
+            env.screen.blit(l3, (0, 112))
+        
+        pygame.draw.circle(env.screen, (255,0,0), (200,200), 2, 0)
+        pygame.display.flip()
+        
+        # event handling, gets all event from the event queue
+        for event in pygame.event.get():
+            # only do something if the event is of type QUIT
+            if event.type == pygame.QUIT:
+                # change the value to False, to exit the main loop
+                running = False
     
 if __name__ == "__main__":
     testShortestTurn(0, pi, pi)
@@ -355,4 +439,5 @@ if __name__ == "__main__":
     testShortestTurn(pi/2, pi/4, -pi/4)
 
     print("Passed all shortestTurn tests")
-    main()
+    autoMain()
+    #main()
