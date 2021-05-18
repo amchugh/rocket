@@ -33,6 +33,9 @@ struct RocketController {
 //const RocketController BEST = { 1.30303623, 5.07266505, 0.04855293, 0.07375364, 4.59165082, 0.21728768 };
 //const RocketController BEST = { 1.30324693, 5.07446025, 0.04875870, 0.07423064, 4.59645008, 0.21727312 };
 //const RocketController BEST = { 1.30384703, 5.08173363, 0.00137470, 0.07474198, 4.60208684, 0.22406336, 0.89 };
+// Some old iterations lol. Some of them use different simulation constants, and some existed before I
+// added the derivative scalar from the PID controller as a trainable parameter.
+
 const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137 };
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
@@ -87,8 +90,8 @@ const double ROCKET_INERTIA = 0.6;
 const double VX_TOLERANCE = 0.1;
 const double VY_TOLERANCE = 0.3;
 const double THETA_TOLERANCE = 0.1;
-//const double NEEDED_STEPS = 5;
 const double NEEDED_STEPS = 20;
+// Evaluates a given RocketController for one simulation
 int runEnv(RocketController* rc, double seed, double dt) {
     // Create the random number generator
     std::mt19937 gen(seed);
@@ -106,8 +109,6 @@ int runEnv(RocketController* rc, double seed, double dt) {
     double I = 0;
     double prev_error = 0;
     int stable_steps = 0;
-
-    //std::cout << "Initial:" << std::endl << "X: " << x << " Y: " << y << " VX: " << vx << " VY: " << vy << " THETA " << theta << " OMEGA " << omega << std::endl;
 
     for (int i = 1; i <= MAX_STEPS; i++) {
         auto thrust = getThrust(rc, dt, vx, vy, omega, theta, I, prev_error);
@@ -128,11 +129,9 @@ int runEnv(RocketController* rc, double seed, double dt) {
         x += vx * dt;
         theta += omega * dt;
         theta = fmod(theta + TAU, TAU);
-		//std::cout << i << " " << x << " " << y << " " << vx << " " << vy << " " << theta << " " << omega << " " << f1 << " " << f2 << std::endl;
 
         // Test to see if the rocket has left the bounds
         if (x < 0 || x > WORLD_SIZE[0] || y < 0 || y > WORLD_SIZE[1]) {
-            //std::cout << "Failed " << i << " X: " << x << " Y: " << y << std::endl;
             return MAX_STEPS;
         }
 
@@ -140,7 +139,6 @@ int runEnv(RocketController* rc, double seed, double dt) {
         if (fabs(vx) < VX_TOLERANCE && fabs(vy) < VY_TOLERANCE && fabs(shortestTurn(theta, 0)) < THETA_TOLERANCE) {
             stable_steps++;
             if (stable_steps >= NEEDED_STEPS) {
-                //std::cout << "Stable " << i << std::endl;
                 return i;
             }
         }
@@ -156,6 +154,8 @@ int runEnv(RocketController* rc, double seed, double dt) {
 }
 
 const int SCENARIOS = 2000;
+// Evaluates a RocketController over many simulations, averages the fitness
+// and stores the value in the RocketController.
 void evaluate_fitness(RocketController* rc, double dt) {
     for (int i = 0; i < SCENARIOS; i++) {
         rc->fitness += runEnv(rc, i, dt);
@@ -163,9 +163,13 @@ void evaluate_fitness(RocketController* rc, double dt) {
     rc->fitness /= SCENARIOS;
 }
 
+// Classically, these are refered to as hyperparameters.
+// Hyperparameters:
 const std::uniform_real_distribution<double> medium_tweak(-.01, .01);
 const std::uniform_real_distribution<double> small_tweak(-.005, .005);
 const std::uniform_real_distribution<double> tiny_tweak(-.0005, .0005);
+
+// Slightly changes all of the RocketController's properties
 void mutate_controller(RocketController* rc, std::mt19937& gen) {
     rc->mag_tolerance += small_tweak(gen);
     rc->proportional_scalar += small_tweak(gen);
@@ -177,6 +181,7 @@ void mutate_controller(RocketController* rc, std::mt19937& gen) {
 }
 
 const std::uniform_real_distribution<double> chance(0., 1.);
+// Randomly swaps properties with another RocketController's.
 void crossover_controller(RocketController* target, RocketController* other, std::mt19937& gen) {
     if (chance(gen) > 0.5) target->mag_tolerance = other->mag_tolerance;
     if (chance(gen) > 0.5) target->proportional_scalar = other->proportional_scalar;
@@ -224,11 +229,19 @@ void next_gen(RocketController* next, RocketController* prev, std::mt19937& gen)
         next[curr] = RocketController(prev[selector(gen)]);
         crossover_controller(&next[curr], &prev[best_index], gen);
         next[curr].fitness = 0;
+        //
+        // I think it was at this point that I realized the problem
+        // was best solved with simple linear regression.
+        // 
+        // Oh well. 
+        //
+        // I had a good time doing this at least.
+        //
     }
 }
 
 void first_gen(RocketController* generation, std::mt19937& gen) {
-    // We will create a bunch based off the values I already have
+    // We will create a bunch based off the values we already have
     generation[0] = BEST;
     for (auto i = 1; i < GEN_SIZE; i++) {
         generation[i] = BEST;
@@ -236,24 +249,29 @@ void first_gen(RocketController* generation, std::mt19937& gen) {
     }
 }
 
+// Tools for evaluating an entire generation using multiple threads.
+// This is thread safe... but don't change anything. lol.
 void evaluate_batch(RocketController* batch, int offset, int batch_size, double dt) {
     for (auto i = 0; i < batch_size; i++) {
         evaluate_fitness(&batch[offset + i], dt);
     }
 }
-
-//Evaluated g1 in 4.521988 seconds
-
 void evaluate_gen(RocketController* generation, double dt) {
+    // todo:: Maybe it's more appropriate to use a threadpool here?
+    // I couldn't be bothered to create my own Job system. This works
+    // fine for my purposes.
+
     // We can use threading here
     const auto processor_count = std::thread::hardware_concurrency() - 1; // One thread we use for leftover
     const auto batch_size = GEN_SIZE / processor_count;
 
     // Create a container for all the threads we are about to spawn.
+    // This might be dynamically allocated? If so,
+    // it's the only dynamic allocation in the entire program.
+    // Everything else is in-place or on the stack.
     std::vector<std::thread> threads;
 
     for (auto i = 0; i < processor_count; i++) {
-        //evaluate_batch(generation, batch_size * i, batch_size, dt);
         threads.emplace_back(std::thread(evaluate_batch, generation, batch_size * i, batch_size, dt));
     }
 
@@ -295,6 +313,9 @@ int main()
 		t2 = high_resolution_clock::now();
 		dt = duration_cast<duration<double>>(t2 - t1);
 		printf("Made next generation in %f seconds\n", dt.count());
+
+        // Now do the same, but swap the roles of g1 and g2.
+        // We do two generations per loop of 'g'.
 
 		t1 = high_resolution_clock::now();
 		evaluate_gen(g2, frameTime);
