@@ -291,7 +291,7 @@ def testShortestTurn(c, t, expected):
     assert shortestTurn(c, t) == expected, "Expected {0} ({2}) Got {1} ({3})".format(expected, shortestTurn(c, t), degrees(expected), degrees(shortestTurn(c, t)))
 
 def main():
-    dt = 1/20.0
+    dt = 1/30.0
     env = RocketEnv(DEFAULT_SIZE, dt)
     env.initrender(None, False)
     clock = pygame.time.Clock()
@@ -322,7 +322,7 @@ def main():
         
         env.render()
         
-        pidx, pidy = pid.moveStep(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta, env.screen) 
+        pidx, pidy = pid.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
         
         if keys[pygame.K_r]:
             env.rocket.vx = 0
@@ -437,7 +437,7 @@ if __name__ == "__main__":
     testShortestTurn(pi/2, 7/4*pi, -3/4*pi)
     testShortestTurn(7/4*pi, pi/2, 3/4*pi)
     testShortestTurn(pi/2, pi/4, -pi/4)
-
     print("Passed all shortestTurn tests")
-    autoMain()
-    #main()
+
+    #autoMain()
+    main()

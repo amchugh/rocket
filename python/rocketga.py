@@ -1,4 +1,4 @@
-# rocket genetic algorithm
+# Used for assessment of a rocket controller
 import rocketenv
 import random
 from math import pi
@@ -21,7 +21,7 @@ MAX_STEPS = 1000
 def testController(_cont, seed):
     env.resetRandom(seed)
     _cont.reset()
-    for i in range(1,MAX_STEPS+1): # random number of max steps
+    for i in range(1,MAX_STEPS+1):
         #f1, f2 = _cont.moveStep(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta)
         f1, f2 = _cont.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta)
         env.step((f1,f2))
@@ -35,7 +35,7 @@ def watchController(_cont, seed):
     env.resetRandom(seed)
     _cont.reset()
     env.render()
-    for i in range(MAX_STEPS): # random number of max steps
+    for i in range(MAX_STEPS):
         sleep(dt/6)
         f1, f2 = _cont.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta)
         env.step((f1,f2))
@@ -57,6 +57,6 @@ def evaluateFitness(_cont):
     
 import time
 start = time.time()
-print(evaluateFitness(controller))
+print("Fitness: %f" % evaluateFitness(controller))
 end = time.time()
-print(end - start)
+print("Evaluated %d simulations in %fs" % (len(seeds), end - start))
