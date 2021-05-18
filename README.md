@@ -1,3 +1,6 @@
+
+
+
 # Machine Learning Assisted Algorithms | Aidan McHugh
 
 ## Summary
@@ -91,7 +94,7 @@ I hard coded a few constants that I found through some brief trial/error. They a
 The video below shows a few random scenarios with these constants.
 You can see that sometimes it almost works.
 
-- [ ] Insert video here.
+https://user-images.githubusercontent.com/12225625/118583902-af36d000-b74a-11eb-82fa-a62e58c135b9.mp4
 
 ## Genetic Algorithm
 
@@ -147,9 +150,7 @@ while True:
 
 ### Genetic Algorithm Implementation
 
-I originally implemented this algorithm in python on my local machine. It did not take long to write -- maybe an hour. I started it and walked away, only to come back and realize this was going to take over twelve hours to run 100 generations. That was not acceptable to me, as I predicted needing around 500 generations and was not willing to wait several days. I rewrote all the code in C++, and then optimized it for execution speed. I got it down to ~600 milliseconds per generation, meaning I could do all 500 generations in around 5 minutes. A significant improvement came from multithreading, but most the improvement came from aggressive compiler optimization and the inherent low-level coding that C++ provides.
-
-- [ ] Add computer specs
+I originally implemented this algorithm in python on my local machine. It did not take long to write -- maybe an hour. I started it and walked away, only to come back and realize this was going to take over twelve hours to run 100 generations. My computer has a i9-10900K CPU; it's powerful. This long execution time was not acceptable to me, as I predicted needing around 500 generations and was not willing to wait several days. I rewrote all the code in C++, and then optimized it for execution speed. I got it down to ~600 milliseconds per generation, meaning I could do all 500 generations in around 5 minutes. A significant improvement came from multithreading, but most the improvement came from aggressive compiler optimization and the inherent low-level coding that C++ provides.
 
 ## New Algorithm Constants
 
@@ -165,7 +166,7 @@ My genetic algorithm found the following constants:
 The video below shows the same random scenarios with these new constants.
 You can see how much better it is than the previous set of constants.
 
-- [ ] Insert video here.
+https://user-images.githubusercontent.com/12225625/118583956-beb61900-b74a-11eb-9b72-29781c068fa1.mp4
 
 ## Conclusion
     
