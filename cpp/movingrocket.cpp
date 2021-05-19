@@ -8,6 +8,7 @@
 #include <thread>
 
 #define PI 3.141592653589793
+#define HALFPI 1.5707963267948966
 #define TAU 6.283185307179586
 
 double shortestTurn(double current, double target) {
@@ -19,11 +20,11 @@ double shortestTurn(double current, double target) {
 
 struct RocketController {
     double safe_turn_speed;
-    double vel_kill_scalar;
+    double dist_scalar;
     double theta_tolerance;
     double rot_scalar;
     double proportional_scalar;
-    double mag_tolerance;
+    double moving_scalar;
     double derivative_scalar;
     double fitness = 0;
 };
@@ -40,11 +41,11 @@ const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
     o << std::fixed << std::setprecision(8) << rc.safe_turn_speed << ", " <<
-        rc.vel_kill_scalar << ", " <<
+        rc.dist_scalar << ", " <<
         rc.theta_tolerance << ", " <<
         rc.rot_scalar << ", " <<
         rc.proportional_scalar << ", " <<
-        rc.mag_tolerance << ", " <<
+        rc.moving_scalar << ", " <<
         rc.derivative_scalar << " FITNESS: " <<
         rc.fitness;
     return o;
@@ -57,6 +58,7 @@ struct desiredThrust {
     double error;
 };
 
+/*
 desiredThrust getThrust(RocketController* rc, double dt, double vx, double vy, double omega, double theta, double I, double prev_error) {
     auto thrust = desiredThrust();
     double target = atan2(vy, vx) + 3. * PI / 2.;
@@ -78,9 +80,44 @@ desiredThrust getThrust(RocketController* rc, double dt, double vx, double vy, d
     }
     return thrust;
 }
+*/
+
+desiredThrust getThrust(RocketController* rc, double dt, double x, double y, double vx, double vy, double omega, double theta, double I, double prev_error) {
+    auto thrust = desiredThrust{};
+
+    double dx = -x;
+    double dy = -y;
+    // Normalize the <dx, dy> according to the dist_scalar
+    double mg = sqrt(dx * dx + dy * dy);
+    double ndx = dx / mg * rc->dist_scalar;
+    double ndy = dy / mg * rc->dist_scalar;
+    // Find the needed change to make the <vx, vy> into the <dx, dy> scaled vector
+    double dvx = ndx - vx;
+    double dvy = ndy - vy;
+    // Find the angle of this dv vector
+    double targetAdj = atan2(dvy, dvx);
+    targetAdj += HALFPI;
+    targetAdj = fmod(targetAdj, TAU);
+    double delta = shortestTurn(theta, targetAdj);
+
+    if (fabs(delta) > rc->theta_tolerance) {
+        if (fabs(omega) > rc->safe_turn_speed) thrust.error = omega;
+        else thrust.error = omega - (delta < 0 ? -(rc->safe_turn_speed) : rc->safe_turn_speed);
+        thrust.I = I + dt * thrust.error;
+        thrust.thrustRight = rc->rot_scalar * (thrust.error * rc->proportional_scalar + thrust.I + (thrust.error - prev_error) / dt * rc->derivative_scalar);
+        thrust.thrustLeft = -thrust.thrustRight;
+    }
+    else {
+        double d = dx*dx*4 + pow(dy - y, 2);
+        thrust.thrustRight = rc->moving_scalar * d;
+        thrust.thrustLeft = thrust.thrustRight;
+    }
+
+    return thrust;
+}
 
 const int STEPS_PER_SECOND = 30;
-const int SIM_SECONDS = 50;
+const int SIM_SECONDS = 130;
 const int MAX_STEPS = SIM_SECONDS * STEPS_PER_SECOND;
 const double WORLD_SIZE[] = { 400, 400 };
 const double MAX_THRUST = 3.2;
@@ -91,27 +128,37 @@ const double VX_TOLERANCE = 0.1;
 const double VY_TOLERANCE = 0.3;
 const double THETA_TOLERANCE = 0.1;
 const double NEEDED_STEPS = 20;
-// Evaluates a given RocketController for one simulation
-int runEnv(RocketController* rc, double seed, double dt) {
+const double MAX_DIST = sqrt(pow(WORLD_SIZE[0], 2) + pow(WORLD_SIZE[1], 2));
+// Returns the average distance from <0,0>
+double runEnv(RocketController* rc, double seed, double dt) {
     // Create the random number generator
     std::mt19937 gen(seed);
-    std::uniform_real_distribution<double> veldist(-10., 10.);
-    std::uniform_real_distribution<double> thetadist(0., TAU);
-    std::uniform_real_distribution<double> omegadist(-PI, PI);
+    const std::uniform_real_distribution<double> veldist(-10., 10.);
+    const std::uniform_real_distribution<double> thetadist(0., TAU);
+    const std::uniform_real_distribution<double> omegadist(-PI, PI);
+    const std::uniform_real_distribution<double> posdist(-100, 100);
     // Set up the simulation
-    double x = WORLD_SIZE[0] / 2.;
-    double y = WORLD_SIZE[1] / 2.;
+    // todo::Figure out a way of setting the start point
+    double x = posdist(gen);
+	double y = posdist(gen);
+    // todo::Should these be zero?
+    /*
     double theta = thetadist(gen);
     double vx = veldist(gen);
     double vy = veldist(gen);
     double omega = omegadist(gen);
+    */
+    double theta = 0, vx = 0, vy = 0, omega = 0;
 
     double I = 0;
     double prev_error = 0;
     int stable_steps = 0;
 
+    double avgX = 0;
+    double avgY = 0;
+
     for (int i = 1; i <= MAX_STEPS; i++) {
-        auto thrust = getThrust(rc, dt, vx, vy, omega, theta, I, prev_error);
+        auto thrust = getThrust(rc, dt, x, y, vx, vy, omega, theta, I, prev_error);
 
         double f1 = std::max(0., std::min(thrust.thrustLeft, MAX_THRUST));
         double f2 = std::max(0., std::min(thrust.thrustRight, MAX_THRUST));
@@ -130,33 +177,29 @@ int runEnv(RocketController* rc, double seed, double dt) {
         theta += omega * dt;
         theta = fmod(theta + TAU, TAU);
 
-        // Test to see if the rocket has left the bounds
-        if (x < 0 || x > WORLD_SIZE[0] || y < 0 || y > WORLD_SIZE[1]) {
-            return MAX_STEPS;
-        }
+        avgX += x;
+        avgY += y;
 
-        // Test to see if the rocket is stable
-        if (fabs(vx) < VX_TOLERANCE && fabs(vy) < VY_TOLERANCE && fabs(shortestTurn(theta, 0)) < THETA_TOLERANCE) {
-            stable_steps++;
-            if (stable_steps >= NEEDED_STEPS) {
-                return i;
-            }
-        }
-        else {
-            stable_steps = 0;
+        // Test to see if the rocket has left the bounds
+        if (x < -WORLD_SIZE[0] || x > WORLD_SIZE[0] || y < -WORLD_SIZE[1] || y > WORLD_SIZE[1]) {
+            return MAX_DIST;
         }
 
         I = thrust.I;
         prev_error = thrust.error;
     }
-    // If it never finished
-    return MAX_STEPS;
+
+    // Return the average distance length
+    avgX /= MAX_STEPS;
+    avgY /= MAX_STEPS;
+    return sqrt(avgX * avgX + avgY * avgY);
 }
 
-const int SCENARIOS = 2000;
+const int SCENARIOS = 100;
 // Evaluates a RocketController over many simulations, averages the fitness
 // and stores the value in the RocketController.
 void evaluate_fitness(RocketController* rc, double dt) {
+    rc->fitness = 0;
     for (int i = 0; i < SCENARIOS; i++) {
         rc->fitness += runEnv(rc, i, dt);
     }
@@ -168,33 +211,40 @@ void evaluate_fitness(RocketController* rc, double dt) {
 const std::uniform_real_distribution<double> medium_tweak(-.01, .01);
 const std::uniform_real_distribution<double> small_tweak(-.005, .005);
 const std::uniform_real_distribution<double> tiny_tweak(-.0005, .0005);
+const double TWEAK_SCALAR = 5.;
 
 // Slightly changes all of the RocketController's properties
-void mutate_controller(RocketController* rc, std::mt19937& gen) {
-    rc->mag_tolerance += small_tweak(gen);
-    rc->proportional_scalar += small_tweak(gen);
-    rc->theta_tolerance += tiny_tweak(gen);
-    rc->rot_scalar += tiny_tweak(gen);
-    rc->safe_turn_speed += tiny_tweak(gen);
-    rc->vel_kill_scalar += small_tweak(gen);
-    rc->derivative_scalar += medium_tweak(gen);
+void mutate_controller(RocketController* rc, double amount, std::mt19937& gen) {
+    rc->dist_scalar += small_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->proportional_scalar += small_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->theta_tolerance += tiny_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->rot_scalar += tiny_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->safe_turn_speed += tiny_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->moving_scalar += small_tweak(gen) * amount * TWEAK_SCALAR;
+    rc->derivative_scalar += medium_tweak(gen) * amount * TWEAK_SCALAR;
 }
 
 const std::uniform_real_distribution<double> chance(0., 1.);
 // Randomly swaps properties with another RocketController's.
 void crossover_controller(RocketController* target, RocketController* other, std::mt19937& gen) {
-    if (chance(gen) > 0.5) target->mag_tolerance = other->mag_tolerance;
+    if (chance(gen) > 0.5) target->dist_scalar = other->dist_scalar;
     if (chance(gen) > 0.5) target->proportional_scalar = other->proportional_scalar;
     if (chance(gen) > 0.5) target->rot_scalar = other->rot_scalar;
     if (chance(gen) > 0.5) target->safe_turn_speed = other->safe_turn_speed;
     if (chance(gen) > 0.5) target->theta_tolerance = other->theta_tolerance;
-    if (chance(gen) > 0.5) target->vel_kill_scalar = other->vel_kill_scalar;
+    if (chance(gen) > 0.5) target->moving_scalar = other->moving_scalar;
     if (chance(gen) > 0.5) target->derivative_scalar = other->derivative_scalar;
+}
+
+const double XRANGE = 600.;
+double scaleFitness(double fitness) {
+    double adj = fitness / XRANGE;
+    return adj * adj;
 }
 
 const int GEN_SIZE = 200;
 const std::uniform_int_distribution<int> selector(0, GEN_SIZE);
-const double CHANCE_SCALAR = 4.;
+const double CHANCE_SCALAR = 0.0004;
 // We construct a new generation of GEN_SIZE.
 // Index 0 will be the best preforming from the 
 // previous generation. There will be a number of rocket controllers
@@ -210,14 +260,11 @@ void next_gen(RocketController* next, RocketController* prev, std::mt19937& gen)
             best_index = i;
             best_fitness = prev[i].fitness;
         }
-        // See if we should mutate
-        if (chance(gen) < (CHANCE_SCALAR / prev[i].fitness)) {
-            // Mutate this controller
-            next[curr] = RocketController(prev[i]);
-            next[curr].fitness = 0;
-            mutate_controller(&next[curr], gen);
-            curr++;
-        }
+		// Mutate this controller
+		next[curr] = RocketController(prev[i]);
+		next[curr].fitness = 0;
+		mutate_controller(&next[curr], scaleFitness(prev[i].fitness), gen);
+		curr++;
     }
     // Set the zeroth to the best performing
     next[0] = RocketController(prev[best_index]);
@@ -245,7 +292,7 @@ void first_gen(RocketController* generation, std::mt19937& gen) {
     generation[0] = BEST;
     for (auto i = 1; i < GEN_SIZE; i++) {
         generation[i] = BEST;
-        mutate_controller(&generation[i], gen);
+        mutate_controller(&generation[i], 1., gen);
     }
 }
 

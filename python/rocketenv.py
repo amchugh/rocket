@@ -193,6 +193,58 @@ class RocketEnv:
             self.rendering = False
             pygame.display.quit()
 
+class MovingRocketController:
+    target = (200, 200)
+    def __init__(self, safe_turn_speed, dist_scalar, theta_tolerance, rot_scalar, proportional_scalar, moving_scalar, derivative_scalar, dt=0.1):
+        self.dist_scalar = dist_scalar
+        self.theta_tolerance = theta_tolerance
+        self.safe_turn_speed = safe_turn_speed
+        self.proportional_scalar = proportional_scalar
+        self.derivative_scalar = derivative_scalar
+        self.rot_scalar = rot_scalar
+        self.moving_scalar = moving_scalar
+        self.dt = dt
+        self.reset()
+        
+    def reset(self):
+        self.I = 0
+        self.e_prev = 0
+
+    def step(self, x, y, vx, vy, omega, theta):
+        dx = self.target[0] - x
+        dy = self.target[1] - y
+        
+        target = atan2(dy, dx) 
+        
+        ndx, ndy = normalize(dx, dy)
+        ndx *= self.dist_scalar
+        ndy *= self.dist_scalar
+        nvx, nvy = normalize(vx, vy)
+        
+        dvx = ndx - vx
+        dvy = ndy - vy
+        
+        t = atan2(dvy, dvx)
+        t += pi / 2
+        if t > 2*pi:
+            t -= 2*pi
+        
+        delta = shortestTurn(theta, t)
+        
+        if abs(delta) > self.theta_tolerance:
+            if abs(omega) > self.safe_turn_speed: e = omega
+            else: e = omega - (self.safe_turn_speed * (-1 if delta < 0 else 1) )
+                
+            self.I = self.I + e*self.dt
+            mv = (e*self.proportional_scalar + self.I + (e-self.e_prev)/self.dt*self.derivative_scalar)
+            
+            self.e_prev = e
+            
+            return -mv*self.rot_scalar, mv*self.rot_scalar
+        else:
+            d = dist(dx-x, dy-y)
+            return self.moving_scalar*d*d, self.moving_scalar*d*d
+
 class RocketController:
     def __init__(self, safe_turn_speed, vel_kill_scalar, theta_tolerance, rot_scalar, proportional_scalar, mag_tolerance, derivative_scalar, dt=0.1):
         self.dt = dt
@@ -231,41 +283,6 @@ class RocketController:
             self.e_prev = e
             
             return -mv*self.rot_scalar, mv*self.rot_scalar
-            
-    def moveStep(self, x, y, vx, vy, omega, theta):#, display):
-        dx = 200 - x
-        dy = 200 - y
-        
-        target = atan2(dy, dx) 
-        #pygame.draw.line(display, (0,0,0), (x,y), (x+25*cos(target), y+25*sin(target)))
-        
-        ndx, ndy = normalize(dx, dy)
-        nvx, nvy = normalize(vx, vy)
-        
-        dvx = ndx - nvx
-        dvy = ndy - nvy
-        
-        t = atan2(dvy, dvx)
-        #pygame.draw.line(display, (0,0,255), (x,y), (x+25*cos(t), y+25*sin(t)))
-        t += pi / 2
-        if t > 2*pi:
-            t -= 2*pi
-        
-        delta = shortestTurn(theta, t)
-        
-        if abs(delta) > 0.1:
-            if abs(omega) > self.safe_turn_speed: e = omega
-            else: e = omega - (self.safe_turn_speed * (-1 if delta < 0 else 1) )
-                
-            self.I = self.I + e*self.dt
-            mv = (e*self.proportional_scalar + self.I + (e-self.e_prev)/self.dt*self.derivative_scalar)
-            
-            self.e_prev = e
-            
-            return -mv*self.rot_scalar, mv*self.rot_scalar
-        else:
-            d = dist(dx-x, dy-y)
-            return 0.01*d, 0.01*d
 
 def normalize(x,y):
     if x == y and y == 0:
@@ -397,7 +414,9 @@ def autoMain():
     env.rocket.GRAVITY = 0.1
     env.initrender(None, False)
     clock = pygame.time.Clock()
-    controller = RocketController(1.30180042, 5.07822616, 0.00407172, 0.01638811, 4.64927884, 0.22577127, 0.62695137, dt)
+    controller = MovingRocketController(2, 0.01, 0.1, 1, 1, 0.1, 0.01, dt)
+    controller = MovingRocketController(1.30291835, 5.08818357, 0.00561298, 0.09783819, 4.65615773, 0.20216449, 0.67209208, dt)
+    controller.reset()
     running = True
     while running:
         clock.tick(60)
@@ -408,7 +427,7 @@ def autoMain():
             
         env.render()
         
-        f1, f2 = controller.moveStep(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta, env.screen) 
+        f1, f2 = controller.step(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
         
         env.step((f1, f2))
         
@@ -439,5 +458,5 @@ if __name__ == "__main__":
     testShortestTurn(pi/2, pi/4, -pi/4)
     print("Passed all shortestTurn tests")
 
-    #autoMain()
-    main()
+    autoMain()
+    #main()

@@ -21,12 +21,7 @@ import ffmpy
 
 # Configureables::
 
-dt = 1/30
-# How many frames should the gif skip (speeds up the simulation playback)
-frame_skips = 6 
-env = rocketenv.RocketEnv(rocketenv.DEFAULT_SIZE, dt)
-# Causes the rocket to really stop before terminating the simulation
-env.NEEDED_STEPS = 60
+MAX_FRAMES = 800
 
 # Other possible controllers
 #controller = rocketenv.RocketController( 1.301, 10.049, 0.051, 0.031, 4.52, 0.202, dt)
@@ -34,10 +29,12 @@ env.NEEDED_STEPS = 60
 #controller = rocketenv.RocketController(1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137, dt)
 #controller = rocketenv.RocketController(1.3, 5, 0.01, 0.01, 1, 0.1, 1)
 
-# The controller to use
-controller = rocketenv.RocketController(1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137, dt)
-
-# End of configurables
+dt = 1/5.0
+env = rocketenv.RocketEnv((800, 800), dt)
+env.reset();
+#env.rocket.GRAVITY = 0.1
+controller = rocketenv.MovingRocketController(1.30291835, 5.08818357, 0.00561298, 0.09783819, 4.65615773, 0.20216449, 0.67209208, dt)
+controller.reset()
 
 def makeGifFromEnv(_name, _cont, desc):
     # Make a directory for the temporary frames
@@ -48,7 +45,7 @@ def makeGifFromEnv(_name, _cont, desc):
     font = pygame.font.SysFont(None, 24)
     description = font.render(desc, True, (0,0,0))
 
-    for i in range(1_000):
+    for i in range(MAX_FRAMES):
         # Save the current image
         env.render()
         fn = "../tmp/%04d.png" % i
@@ -62,10 +59,11 @@ def makeGifFromEnv(_name, _cont, desc):
         
         pygame.image.save(env.screen, fn)
         
-        f1, f2 = _cont.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta)
+        #f1, f2 = _cont.step(env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta)
+        f1, f2 = _cont.step(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
         env.step((f1,f2))
-        if env.isStable() or env.isFailed():
-            break
+        #if env.isStable() or env.isFailed():
+        #    break
 
     env.closerender()
     print("Finished making images", i)
@@ -108,6 +106,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Simulate the ten scenarios
+    """
     for i in range(0,10):
         env.resetRandom(i+201)
         makeGifFromEnv('../tmp/%02d.gif' % i, controller, 'Scenario #%d' % (i+1))
@@ -119,6 +118,9 @@ if __name__ == "__main__":
             for im in images:
                 writer.append_data(im)
     print("Generated '../tmp/final.gif'")
+    """
+    
+    makeGifFromEnv('../tmp/final.gif', controller, '')
 
     # Convert the gif to mp4
     ff = ffmpy.FFmpeg(inputs={'../tmp/final.gif':None},outputs={name:'-pix_fmt yuv420p'})
