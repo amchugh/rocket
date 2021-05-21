@@ -2,7 +2,7 @@ import rocketenv
 import pygame
 
 
-dt = 1/5.0
+dt = 1/30.0
 env = rocketenv.RocketEnv((800, 800), dt)
 env.reset();
 env.initrender(None, False)
@@ -25,9 +25,9 @@ while running:
     
     if pygame.mouse.get_pressed()[0]: controller.target = pygame.mouse.get_pos()
     
-    f1, f2 = controller.step(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
-    
-    env.step((f1, f2))
+    for i in range(6):
+        f1, f2 = controller.step(env.rocket.x, env.rocket.y, env.rocket.vx, env.rocket.vy, env.rocket.omega, env.rocket.theta) 
+        env.step((f1, f2))
     
     pygame.draw.circle(env.screen, (255,0,0), controller.target, 2, 0)
     pygame.display.flip()
