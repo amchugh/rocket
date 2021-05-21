@@ -26,7 +26,7 @@ struct RocketController {
     double proportional_scalar;
     double moving_scalar;
     double derivative_scalar;
-    double fitness = 0;
+    double fitness = 0.;
 };
 
 //const RocketController BEST = { 1.29942213, 5.04038849, 0.05116001, 0.04144201, 4.54285239, 0.19883754 };
@@ -37,7 +37,8 @@ struct RocketController {
 // Some old iterations lol. Some of them use different simulation constants, and some existed before I
 // added the derivative scalar from the PID controller as a trainable parameter.
 
-const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137 };
+//const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137 };
+const RocketController BEST = { 1.29985418, 5.06376375, 0.00210916, 0.09633277, 4.64475061, 0.21872067, 0.60593377 };
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
     o << std::fixed << std::setprecision(8) << rc.safe_turn_speed << ", " <<
@@ -121,26 +122,24 @@ const int SIM_SECONDS = 130;
 const int MAX_STEPS = SIM_SECONDS * STEPS_PER_SECOND;
 const double WORLD_SIZE[] = { 400, 400 };
 const double MAX_THRUST = 3.2;
-const double GRAVITY = 1.;
+const double GRAVITY = 1.0;
 const double ROCKET_MASS = 1.;
 const double ROCKET_INERTIA = 0.6;
-const double VX_TOLERANCE = 0.1;
-const double VY_TOLERANCE = 0.3;
-const double THETA_TOLERANCE = 0.1;
-const double NEEDED_STEPS = 20;
 const double MAX_DIST = sqrt(pow(WORLD_SIZE[0], 2) + pow(WORLD_SIZE[1], 2));
+
 // Returns the average distance from <0,0>
 double runEnv(RocketController* rc, double seed, double dt) {
     // Create the random number generator
     std::mt19937 gen(seed);
-    const std::uniform_real_distribution<double> veldist(-10., 10.);
-    const std::uniform_real_distribution<double> thetadist(0., TAU);
-    const std::uniform_real_distribution<double> omegadist(-PI, PI);
-    const std::uniform_real_distribution<double> posdist(-100, 100);
+	std::uniform_real_distribution<double> veldist(-10., 10.);
+	std::uniform_real_distribution<double> thetadist(0., TAU);
+	std::uniform_real_distribution<double> omegadist(-PI, PI);
+	std::uniform_real_distribution<double> positionDist(-100., 100.);
+
     // Set up the simulation
     // todo::Figure out a way of setting the start point
-    double x = posdist(gen);
-	double y = posdist(gen);
+    double x = positionDist(gen);
+	double y = positionDist(gen);
     // todo::Should these be zero?
     /*
     double theta = thetadist(gen);
@@ -156,6 +155,8 @@ double runEnv(RocketController* rc, double seed, double dt) {
 
     double avgX = 0;
     double avgY = 0;
+
+    //printf("Starting %f, %f\n", x, y);
 
     for (int i = 1; i <= MAX_STEPS; i++) {
         auto thrust = getThrust(rc, dt, x, y, vx, vy, omega, theta, I, prev_error);
@@ -190,20 +191,26 @@ double runEnv(RocketController* rc, double seed, double dt) {
     }
 
     // Return the average distance length
-    avgX /= MAX_STEPS;
-    avgY /= MAX_STEPS;
-    return sqrt(avgX * avgX + avgY * avgY);
+    //printf("avgx: %f avgy: %f steps: %d", avgX, avgY, MAX_STEPS);
+    avgX = avgX / (double)MAX_STEPS;
+    avgY = avgY / (double)MAX_STEPS;
+    double fin = sqrt(avgX * avgX + avgY * avgY);
+    //printf(" favgx: %f favgy: %f final: %f\n", avgX, avgY, fin);
+    return fin;
 }
 
 const int SCENARIOS = 100;
 // Evaluates a RocketController over many simulations, averages the fitness
 // and stores the value in the RocketController.
 void evaluate_fitness(RocketController* rc, double dt) {
-    rc->fitness = 0;
+    rc->fitness = 0.;
     for (int i = 0; i < SCENARIOS; i++) {
-        rc->fitness += runEnv(rc, i, dt);
+        auto df = runEnv(rc, i, dt);
+        rc->fitness += df;
+        //printf("run fitness: %f\n", df);
     }
     rc->fitness /= SCENARIOS;
+    //printf("fitness: %f\n", rc->fitness);
 }
 
 // Classically, these are refered to as hyperparameters.
@@ -242,6 +249,8 @@ double scaleFitness(double fitness) {
     return adj * adj;
 }
 
+int find_best_controller(RocketController*);
+
 const int GEN_SIZE = 200;
 const std::uniform_int_distribution<int> selector(0, GEN_SIZE);
 const double CHANCE_SCALAR = 0.0004;
@@ -250,41 +259,33 @@ const double CHANCE_SCALAR = 0.0004;
 // previous generation. There will be a number of rocket controllers
 // which are simply mutated over, and the remainder are random crossovers.
 void next_gen(RocketController* next, RocketController* prev, std::mt19937& gen) {
-    int curr = 1;
-    int best_index = -1;
-    int best_fitness = MAX_STEPS;
+    int best_index = find_best_controller(prev);
     // Randomly mutate some (also find the best)
     for (int i = 0; i < GEN_SIZE; i++) {
-        // See if this controller has the best fitness
-        if (prev[i].fitness <= best_fitness) {
-            best_index = i;
-            best_fitness = prev[i].fitness;
-        }
+        // Create the controller as a clone
+		next[i] = RocketController(prev[i]);
+
+        // We won't modify the best.
+        if (i == best_index) continue;
+
 		// Mutate this controller
-		next[curr] = RocketController(prev[i]);
-		next[curr].fitness = 0;
-		mutate_controller(&next[curr], scaleFitness(prev[i].fitness), gen);
-		curr++;
+		mutate_controller(&next[i], scaleFitness(prev[i].fitness), gen);
+
+        // Crossover the controller
+        crossover_controller(&next[i], &prev[best_index], gen);
     }
-    // Set the zeroth to the best performing
-    next[0] = RocketController(prev[best_index]);
-    // I also want to print the values for this
-    std::cout << "Best in generation: " << next[0] << std::endl;
-    // Fill the rest with crossovers
-    for (; curr < GEN_SIZE; curr++) {
-        // Clone a random controller
-        next[curr] = RocketController(prev[selector(gen)]);
-        crossover_controller(&next[curr], &prev[best_index], gen);
-        next[curr].fitness = 0;
-        //
-        // I think it was at this point that I realized the problem
-        // was best solved with simple linear regression.
-        // 
-        // Oh well. 
-        //
-        // I had a good time doing this at least.
-        //
+	//printf(" ---- Found the best %d %f %f %b\n", best_index, best_fitness, prev[best_index].fitness, prev[best_index].fitness < 0.1);
+    std::cout << "Best in generation:: " << next[best_index] << std::endl;
+}
+
+int find_best_controller(RocketController* conts) {
+    int best_index = 0;
+    for (int i = 1; i < GEN_SIZE; i++) {
+        if (conts[i].fitness < conts[best_index].fitness) {
+            best_index = i;
+        }
     }
+    return best_index;
 }
 
 void first_gen(RocketController* generation, std::mt19937& gen) {
@@ -337,6 +338,14 @@ int main()
     using namespace std::chrono;
 
     const double frameTime = 1.0 / STEPS_PER_SECOND;
+
+    // 1.30029250, 5.07828300, 0.00134934, 0.09726833, 4.66757633, 0.21453632, 0.65342627 FITNESS: 7.72828533
+    //auto rc = RocketController{ 1.30190067, 5.04641240, 0.00335599, 0.09859369, 4.62025448, 0.19743513, 0.60724602 };
+    auto rc = RocketController{ 1.30029250, 5.07828300, 0.00134934, 0.09726833, 4.66757633, 0.21453632, 0.65342627 };
+	evaluate_fitness(&rc, frameTime);
+    printf("Fitness: %f\n", rc.fitness);
+	evaluate_fitness(&rc, frameTime);
+    printf("2nd time fitness: %f\n", rc.fitness);
 
     RocketController g1[GEN_SIZE];
 	RocketController g2[GEN_SIZE];

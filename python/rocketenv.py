@@ -214,8 +214,6 @@ class MovingRocketController:
         dx = self.target[0] - x
         dy = self.target[1] - y
         
-        target = atan2(dy, dx) 
-        
         ndx, ndy = normalize(dx, dy)
         ndx *= self.dist_scalar
         ndy *= self.dist_scalar
@@ -414,7 +412,6 @@ def autoMain():
     env.rocket.GRAVITY = 0.1
     env.initrender(None, False)
     clock = pygame.time.Clock()
-    controller = MovingRocketController(2, 0.01, 0.1, 1, 1, 0.1, 0.01, dt)
     controller = MovingRocketController(1.30291835, 5.08818357, 0.00561298, 0.09783819, 4.65615773, 0.20216449, 0.67209208, dt)
     controller.reset()
     running = True
@@ -448,7 +445,7 @@ def autoMain():
             if event.type == pygame.QUIT:
                 # change the value to False, to exit the main loop
                 running = False
-    
+
 if __name__ == "__main__":
     testShortestTurn(0, pi, pi)
     testShortestTurn(0, pi/2, pi/2)

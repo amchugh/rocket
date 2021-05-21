@@ -21,7 +21,8 @@ import ffmpy
 
 # Configureables::
 
-MAX_FRAMES = 800
+MAX_FRAMES = 3200
+frame_skips = 6
 
 # Other possible controllers
 #controller = rocketenv.RocketController( 1.301, 10.049, 0.051, 0.031, 4.52, 0.202, dt)
@@ -29,11 +30,13 @@ MAX_FRAMES = 800
 #controller = rocketenv.RocketController(1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137, dt)
 #controller = rocketenv.RocketController(1.3, 5, 0.01, 0.01, 1, 0.1, 1)
 
-dt = 1/5.0
+dt = 1/30
 env = rocketenv.RocketEnv((800, 800), dt)
 env.reset();
-#env.rocket.GRAVITY = 0.1
-controller = rocketenv.MovingRocketController(1.30291835, 5.08818357, 0.00561298, 0.09783819, 4.65615773, 0.20216449, 0.67209208, dt)
+env.rocket.GRAVITY = 1
+#controller = rocketenv.MovingRocketController(1.30291835, 5.08818357, 0.00561298, 0.09783819, 4.65615773, 0.20216449, 0.67209208, dt)
+#controller = rocketenv.MovingRocketController(1.29985408, 5.06374312, 0.00210933, 0.09633287, 4.64475739, 0.21874083, 0.60593377, dt)
+controller = rocketenv.MovingRocketController(1.29980793, 5.05956982, 0.00372743, 0.09874277, 4.64499910, 0.20881341, 0.56076263, dt)
 controller.reset()
 
 def makeGifFromEnv(_name, _cont, desc):
