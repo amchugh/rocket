@@ -38,7 +38,8 @@ struct RocketController {
 // added the derivative scalar from the PID controller as a trainable parameter.
 
 //const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137 };
-const RocketController BEST = { 1.29985418, 5.06376375, 0.00210916, 0.09633277, 4.64475061, 0.21872067, 0.60593377 };
+//const RocketController BEST = { 1.29980793, 5.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
+const RocketController BEST = { 1.29980793, 14.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
     o << std::fixed << std::setprecision(8) << rc.safe_turn_speed << ", " <<
@@ -121,10 +122,10 @@ const int STEPS_PER_SECOND = 30;
 const int SIM_SECONDS = 130;
 const int MAX_STEPS = SIM_SECONDS * STEPS_PER_SECOND;
 const double WORLD_SIZE[] = { 400, 400 };
-const double MAX_THRUST = 3.2;
+const double MAX_THRUST = 10.0;
 const double GRAVITY = 1.0;
 const double ROCKET_MASS = 1.;
-const double ROCKET_INERTIA = 0.6;
+const double ROCKET_INERTIA = 0.4;
 const double MAX_DIST = sqrt(pow(WORLD_SIZE[0], 2) + pow(WORLD_SIZE[1], 2));
 
 // Returns the average distance from <0,0>
@@ -218,7 +219,7 @@ void evaluate_fitness(RocketController* rc, double dt) {
 const std::uniform_real_distribution<double> medium_tweak(-.01, .01);
 const std::uniform_real_distribution<double> small_tweak(-.005, .005);
 const std::uniform_real_distribution<double> tiny_tweak(-.0005, .0005);
-const double TWEAK_SCALAR = 5.;
+const double TWEAK_SCALAR = 25.;
 
 // Slightly changes all of the RocketController's properties
 void mutate_controller(RocketController* rc, double amount, std::mt19937& gen) {
@@ -243,7 +244,8 @@ void crossover_controller(RocketController* target, RocketController* other, std
     if (chance(gen) > 0.5) target->derivative_scalar = other->derivative_scalar;
 }
 
-const double XRANGE = 600.;
+//const double XRANGE = 600.;
+const double XRANGE = 40.;
 double scaleFitness(double fitness) {
     double adj = fitness / XRANGE;
     return adj * adj;
@@ -251,7 +253,7 @@ double scaleFitness(double fitness) {
 
 int find_best_controller(RocketController*);
 
-const int GEN_SIZE = 200;
+const int GEN_SIZE = 300;
 const std::uniform_int_distribution<int> selector(0, GEN_SIZE);
 const double CHANCE_SCALAR = 0.0004;
 // We construct a new generation of GEN_SIZE.

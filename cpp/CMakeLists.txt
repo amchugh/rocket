@@ -4,3 +4,5 @@ project(Rocket)
 
 add_executable(Rocket rocket.cpp)
 add_executable(MovingRocket movingrocket.cpp)
+
+set(CMAKE_CXX_FLAGS "-O2")
