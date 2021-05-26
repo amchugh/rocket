@@ -41,7 +41,9 @@ struct RocketController {
 //const RocketController BEST = { 1.29980793, 5.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
 //const RocketController BEST = { 1.29980793, 14.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
 //const RocketController BEST = { 1.30073533, 14.15663314, -0.00397969, 0.11021518, 4.78659254, 0.15580178, 0.81834318 };
-const RocketController BEST = { 1.30103649, 14.12807184, -0.00416717, 0.11021518, 4.79300645, 0.06620423, 0.81834318 };
+//const RocketController BEST = { 1.30103649, 24.12807184, -0.00416717, 0.11021518, 4.79300645, 0.06620423, 0.81834318 };
+//const RocketController BEST = { 1.30300312, 24.10937873, -0.00392903, 0.10979283, 4.80212557, 0.07160376, 0.84756384 };
+const RocketController BEST = { 1.30300312, 100.10937873, -0.00392903, 0.10979283, 4.80212557, 0.07160376, 0.84756384 };
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
     o << std::fixed << std::setprecision(8) << rc.safe_turn_speed << ", " <<
@@ -129,7 +131,7 @@ const double GRAVITY = 1.0;
 const double ROCKET_MASS = 1.;
 const double ROCKET_INERTIA = 0.4;
 const double MAX_DIST = sqrt(pow(WORLD_SIZE[0], 2) + pow(WORLD_SIZE[1], 2));
-const double TOLERANCE = 0.1;
+const double TOLERANCE = 30.;
 
 // Returns the average distance from <0,0>
 double runEnv(RocketController* rc, double seed, double dt) {
@@ -263,7 +265,7 @@ double scaleFitness(double fitness) {
 
 int find_best_controller(RocketController*);
 
-const int GEN_SIZE = 300;
+const int GEN_SIZE = 1000;
 const std::uniform_int_distribution<int> selector(0, GEN_SIZE);
 const double CHANCE_SCALAR = 0.0004;
 // We construct a new generation of GEN_SIZE.

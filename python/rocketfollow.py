@@ -2,7 +2,8 @@ import rocketenv
 import pygame
 import random
 
-SIZE = (800,800)
+SIZE = (800,900)
+FLOOR = 800
 
 class Missile:
     def __init__(self, world_size, pos, vel, dt):
@@ -13,7 +14,7 @@ class Missile:
     def step(self):
         self.pos[0] += self.vel[0] * self.dt
         self.pos[1] += self.vel[1] * self.dt
-        return self.pos[0] < 0 or self.pos[0] > self.world_size[0] or self.pos[1] < 0 or self.pos[1] > self.world_size[1]
+        return self.pos[0] < 0 or self.pos[0] > self.world_size[0] or self.pos[1] < 0 or self.pos[1] > FLOOR
     def draw(self, screen):
         LENGTH = 1
         fin = (self.pos[0] - self.vel[0] * LENGTH, self.pos[1] - self.vel[1] * LENGTH)
@@ -23,7 +24,7 @@ SLANT = 200
 def makeMissile():
     startX = random.randint(SLANT,SIZE[0]-SLANT)
     endX = random.randint(-SLANT,SLANT)
-    vx, vy = rocketenv.normalize(endX, SIZE[1])
+    vx, vy = rocketenv.normalize(endX, FLOOR)
     vel = (vx*MISSILE_SPEED, vy*MISSILE_SPEED)
     return Missile(SIZE, (startX, 0), vel, dt)
     
@@ -49,7 +50,12 @@ clock = pygame.time.Clock()
 #env.rocket.ROCKET_ROTATIONAL_INERTIA = 0.4
 
 # Slower, but looks better. Evaluated based on time to point FITNESS: 802.6
-controller = rocketenv.MovingRocketController(1.30103649, 14.12807184, -0.00416717, 0.11021518, 4.79300645, 0.06620423, 0.81834318)
+#controller = rocketenv.MovingRocketController(1.30103649, 24.12807184, -0.00416717, 0.11021518, 4.79300645, 0.06620423, 0.81834318)
+#env.rocket.ROCKET_MAX_INDIVIDUAL_FORCE = 10
+#env.rocket.ROCKET_ROTATIONAL_INERTIA = 0.4
+
+# This one is faster, but it overshoots a lot. FITNESS: 291.74
+controller = rocketenv.MovingRocketController(1.30300312, 24.10937873, -0.00392903, 0.10979283, 4.80212557, 0.07160376, 0.84756384)
 env.rocket.ROCKET_MAX_INDIVIDUAL_FORCE = 10
 env.rocket.ROCKET_ROTATIONAL_INERTIA = 0.4
 
@@ -105,6 +111,7 @@ while running:
     
     pygame.draw.circle(env.screen, (0,255,0), controller.target, 2, 0)
     pygame.draw.circle(env.screen, (0,0,255), (env.rocket.x, env.rocket.y), DIST, 1)
+    pygame.draw.line(env.screen, (0,0,0), (0, FLOOR), (SIZE[0], FLOOR))
     pygame.display.flip()
     
     # event handling, gets all event from the event queue
