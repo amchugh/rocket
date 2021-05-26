@@ -40,7 +40,8 @@ struct RocketController {
 //const RocketController BEST = { 1.30180042, 5.07822616, 0.00407172, 0.09638811, 4.64927884, 0.22577127, 0.62695137 };
 //const RocketController BEST = { 1.29980793, 5.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
 //const RocketController BEST = { 1.29980793, 14.05956982, 0.00372742, 0.09874277, 4.64499910, 0.20881300, 0.56076263 };
-const RocketController BEST = { 1.30073533, 14.15663314, -0.00397969, 0.11021518, 4.78659254, 0.15580178, 0.81834318 };
+//const RocketController BEST = { 1.30073533, 14.15663314, -0.00397969, 0.11021518, 4.78659254, 0.15580178, 0.81834318 };
+const RocketController BEST = { 1.30103649, 14.12807184, -0.00416717, 0.11021518, 4.79300645, 0.06620423, 0.81834318 };
 
 std::ostream& operator << (std::ostream& o, const RocketController& rc) {
     o << std::fixed << std::setprecision(8) << rc.safe_turn_speed << ", " <<
@@ -227,7 +228,7 @@ void evaluate_fitness(RocketController* rc, double dt) {
 const std::uniform_real_distribution<double> medium_tweak(-.01, .01);
 const std::uniform_real_distribution<double> small_tweak(-.005, .005);
 const std::uniform_real_distribution<double> tiny_tweak(-.0005, .0005);
-const double TWEAK_SCALAR = 25.;
+const double TWEAK_SCALAR = 5.;
 
 // Slightly changes all of the RocketController's properties
 void mutate_controller(RocketController* rc, double amount, std::mt19937& gen) {

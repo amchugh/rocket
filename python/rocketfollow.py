@@ -86,6 +86,8 @@ while running:
     
     else:
         controller.target = CENTER
+        
+    if pygame.mouse.get_pressed()[0]: controller.target = pygame.mouse.get_pos()
     
     c_i+=1
     if c_i >= ROCKET_INTERVAL * fps:
